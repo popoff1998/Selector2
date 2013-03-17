@@ -75,9 +75,7 @@ class config(object):
 
     def getSessionsList(self):
         l = self.getSessionsRawList()
-        pprint(l)
         for linea in l:
-            print linea
             for indice,var,value in linea:
                 index = int(indice)
                 if len(self.sessionsList) < index+1:
