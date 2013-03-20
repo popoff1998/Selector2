@@ -25,7 +25,7 @@ MINIMUN_SESSIONS_LIMIT=3
 PLATFORM = {'win32':{'background':'./fondo.png',
                      'config':'conf.network'},
             'linux2':{'background':'/usr/local/uco/selector/fondo.png',
-                      'config':'conf.txt'}
+                      'config':'/etc/thinstation.network'}
             }
 
 BEST_SESSION_SIZE=3
