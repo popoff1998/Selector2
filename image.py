@@ -1,7 +1,7 @@
 # -*- coding: utf-8 -*-
 
 PIXEL_SPACING = 10 #separacion en pixeles
-IMAGE_PREFIX = "computer_key_"
+IMAGE_PREFIX = "/usr/local/uco/selector/computer_key_"
 SCALED_WIDTH = 70 #ancho de los iconos escalados
 FONT_SIZE = 22
 
