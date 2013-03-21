@@ -1,7 +1,6 @@
 # -*- coding: utf-8 -*-
 
 PIXEL_SPACING = 10 #separacion en pixeles
-IMAGE_PREFIX = "/usr/local/uco/selector/computer_key_"
 SCALED_WIDTH = 70 #ancho de los iconos escalados
 FONT_SIZE = 22
 
@@ -34,11 +33,14 @@ class CompoundImage(QtGui.QGraphicsWidget):
     """
 
     def __init__(self,key,preStr,postStr,screen):
+        from selector_ng import PLATFORM
+
         
         super(CompoundImage, self).__init__(None)
         self.pixmap = QtGui.QGraphicsPixmapItem()
         painter = QtGui.QPainter()
 
+        IMAGE_PREFIX = PLATFORM.get(sys.platform).get('key_prefix')
         font = QtGui.QFont("calibri",FONT_SIZE,100)
         fm = QtGui.QFontMetrics(font)
         preWidth = fm.width(preStr)
