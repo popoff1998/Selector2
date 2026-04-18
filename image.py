@@ -5,9 +5,15 @@ IMAGE_PREFIX = "computer_key_"
 SCALED_WIDTH = 70 #ancho de los iconos escalados
 FONT_SIZE = 22
 
-from PyQt4 import QtCore, QtGui
+from qt_compat import QtCore, QtGui
 import sys
-from PyQt4.QtCore import qVersion, PYQT_VERSION_STR
+
+
+def qVersion():
+    return QtCore.qVersion()
+
+
+PYQT_VERSION_STR = QtCore.PYQT_VERSION_STR
 
 def versionInfo():
     """Returns a tuple containing some (...) version strings
@@ -48,12 +54,12 @@ class CompoundImage(QtGui.QGraphicsWidget):
         if img.width() == 0:
             img = QtGui.QImage(SCALED_WIDTH,SCALED_WIDTH,\
                                QtGui.QImage.Format_ARGB32)
-        SCALED_HEIGHT = (SCALED_WIDTH * img.height()) / img.width()
-        image = QtGui.QImage(3*SCALED_WIDTH + \
-                             4*PIXEL_SPACING + \
-                             preWidth + \
-                             postWidth, \
-                             SCALED_HEIGHT,QtGui.QImage.Format_ARGB32)
+        SCALED_HEIGHT = int((SCALED_WIDTH * img.height()) / img.width())
+        image = QtGui.QImage(int(3 * SCALED_WIDTH + \
+                     4 * PIXEL_SPACING + \
+                     preWidth + \
+                     postWidth), \
+                     int(SCALED_HEIGHT), QtGui.QImage.Format_ARGB32)
         if qVersion() < '4.8':
             color = 0xFFFFFF
         else:
@@ -70,7 +76,14 @@ class CompoundImage(QtGui.QGraphicsWidget):
         #Pinto las teclas
         for f in ("Ctrl.png","Alt.png",key+".png"):
             img = QtGui.QImage(IMAGE_PREFIX + f)
-            painter.drawImage(pos,0,img.scaledToWidth(SCALED_WIDTH,1))
+            if img.isNull():
+                # Fallback transparente para teclas sin icono disponible.
+                img = QtGui.QImage(SCALED_WIDTH, SCALED_HEIGHT,
+                                   QtGui.QImage.Format_ARGB32)
+                img.fill(QtGui.QColor(0, 0, 0, 0))
+                painter.drawImage(pos, 0, img)
+            else:
+                painter.drawImage(pos,0,img.scaledToWidth(SCALED_WIDTH,1))
             pos = pos + SCALED_WIDTH + PIXEL_SPACING
 
         #Pinto el texto de la derecha

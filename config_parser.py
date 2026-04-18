@@ -11,7 +11,7 @@ import inspect
 import re
 from collections import defaultdict
 from pprint import pprint
-from PyQt4 import QtCore, QtGui
+from qt_compat import QtCore, QtGui
 from selector_ng import Pixmap , SESSIONS_LIMIT
 import copy
 
@@ -24,7 +24,24 @@ class session(object):
         self.title = valores["TITLE"]
         self.type = valores["TYPE"]
         self.vt = int(valores["SCREEN"]) + 3
-        pixmap_rc = ":/"+self.type+".png"
+
+        # Permite tipos con o sin extension y mantiene compatibilidad.
+        icon_name = self.type.strip()
+        if "." in icon_name:
+            candidate_paths = [":/" + icon_name]
+        else:
+            candidate_paths = [
+                ":/" + icon_name + ".png",
+                ":/" + icon_name + ".jpg",
+                ":/" + icon_name + ".jpeg",
+            ]
+
+        pixmap_rc = candidate_paths[0]
+        for path in candidate_paths:
+            pix = QtGui.QPixmap(path)
+            if not pix.isNull():
+                pixmap_rc = path
+                break
         self.numeroSesiones = parent.numeroSesiones
         self.pixmap = Pixmap(QtGui.QPixmap(pixmap_rc),self,sep_x,teclasSelector) 
         
@@ -35,10 +52,10 @@ class config(object):
            
        """
     def __init__(self,filename):
-        try:        
+        try:
             f = open(filename,"r")
-        except:
-            print "El fichero ",filename," no existe"
+        except Exception:
+            print("El fichero ", filename, " no existe")
             return False
         self.text = f.readlines()
         self.sessionsDict={}
@@ -51,11 +68,11 @@ class config(object):
         con las lineas de configuracion en modo raw devolviendo una list"""
         
         #Elimina las lineas de comentario o en blanco
-        text = filter( lambda x:re.search('^[^#].',x), self.text)
+        text = [x for x in self.text if re.search('^[^#].', x)]
         #Parsea los elementos de SESSION
-        raw = map( lambda x:re.findall( "SESSION_([0-9])_(.*)=(.*)",x), text)
+        raw = [re.findall("SESSION_([0-9])_(.*)=(.*)", x) for x in text]
         #Eliminamos los elementos vacios
-        self.sessionsRawList = filter(lambda x:len(x)>0, raw)
+        self.sessionsRawList = [x for x in raw if len(x) > 0]
         self.sessionsRawList.sort()
         return self.sessionsRawList
     
@@ -82,11 +99,12 @@ class config(object):
                     self.sessionsList.append({})
                 self.sessionsList[int(indice)].setdefault(var,value)
         #Borro la sesion del selector
-        self.sessionsList = filter(lambda x:x.get('TYPE') != 'selector',
-                                  self.sessionsList)             
+        self.sessionsList = [x for x in self.sessionsList
+                     if x.get('TYPE') != 'selector']
         #Borro las sesiones mayores que sessions limit
-        self.sessionsList = filter(lambda x:self.sessionsList.index(x) < SESSIONS_LIMIT or\
-                                            SESSIONS_LIMIT == 0, self.sessionsList)
+        self.sessionsList = [x for x in self.sessionsList
+                     if self.sessionsList.index(x) < SESSIONS_LIMIT or
+                     SESSIONS_LIMIT == 0]
         self.numeroSesiones = len(self.sessionsList)
         return self.sessionsList
 

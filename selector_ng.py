@@ -7,7 +7,7 @@ Created on Thu Mar 07 08:31:30 2013
 Selector-ng
 """
 
-from PyQt4 import QtCore, QtGui
+from qt_compat import QtCore, QtGui
 from pprint import pprint
 import selector_ng_rc
 import copy
@@ -23,7 +23,9 @@ SESSIONS_LIMIT = 0 # 0=unlimited
 MINIMUN_SESSIONS_LIMIT=3
 
 PLATFORM = {'win32':{'background':'./fondo.png',
-                     'config':'conf.network'},
+                     'config':'conf.txt'},
+            'linux':{'background':'/usr/local/uco/selector/fondo.png',
+                     'config':'conf.txt'},
             'linux2':{'background':'/usr/local/uco/selector/fondo.png',
                       'config':'conf.txt'}
             }
@@ -60,11 +62,12 @@ class MyWindow(QtGui.QGraphicsView):
         #self.setFocus(0)
         #self.raise_()        
         #self.activateWindow()
-        print "Tengo el foco? ",self.hasFocus()
+        print("Tengo el foco? ", self.hasFocus())
         
     def keyPressEvent(self, e):
+        global ZOOM_FACTOR
         if e.key() == QtCore.Qt.Key_Escape:
-            sys.exit(app.exec_())
+            self.app.quit()
         if e.key() == QtCore.Qt.Key_Plus:
             ZOOM_FACTOR = ZOOM_FACTOR + 0.2
 #    def changeEvent(self, e):
@@ -96,7 +99,7 @@ class Pixmap(QtGui.QGraphicsWidget):
             
         scale = (DEFAULT_ICON_SIZE * BEST_SESSION_SIZE * s) \
                 /numeroSesiones 
-        self.orig = self.orig.scaledToHeight(scale,SCALE_TRANSFORMATION_MODE)
+        self.orig = self.orig.scaledToHeight(int(scale),SCALE_TRANSFORMATION_MODE)
 
         #Geometria del pixmap
         ICON_SIZE = self.orig.width()
@@ -112,6 +115,7 @@ class Pixmap(QtGui.QGraphicsWidget):
         fontSize = 5+(DEFAULT_FONT_SIZE * ICON_SIZE/DEFAULT_ICON_SIZE) 
         if fontSize < MINIMUN_FONT_SIZE: 
             fontSize = MINIMUN_FONT_SIZE
+        fontSize = int(fontSize)
         #print fontSize,ICON_SIZE
         font = QtGui.QFont("calibri",fontSize,100) #family,size,weight
         self.label =  QtGui.QGraphicsTextItem()
@@ -203,13 +207,13 @@ def createStates(objects , parent):
 def createAnimations(objects, machine):
     for obj in objects:
         animationGroup = QtCore.QParallelAnimationGroup(obj)
-        animationPixmap = QtCore.QPropertyAnimation(obj, 'geometry',obj)
-        animationLabel = QtCore.QPropertyAnimation(obj.label, 'y',obj)
+        animationPixmap = QtCore.QPropertyAnimation(obj, b'geometry', obj)
+        animationLabel = QtCore.QPropertyAnimation(obj.label, b'y', obj)
         animationGroup.addAnimation(animationPixmap)
         animationGroup.addAnimation(animationLabel)
 
         if TEXT_ROTATE:
-            animationRotate = QtCore.QPropertyAnimation(obj.label, 'rotation',obj)
+            animationRotate = QtCore.QPropertyAnimation(obj.label, b'rotation', obj)
             animationGroup.addAnimation(animationRotate)
         
         machine.addDefaultAnimation(animationGroup)
@@ -228,8 +232,9 @@ if __name__ == '__main__':
     scene = QtGui.QGraphicsScene(float(screen.x()),float(screen.y()), 
                                  float(screen.width()),float(screen.height()))
 
-    Background = PLATFORM.get(sys.platform).get('background')
-    Config     = PLATFORM.get(sys.platform).get('config')
+    platform_config = PLATFORM.get(sys.platform, PLATFORM.get('win32'))
+    Background = platform_config.get('background')
+    Config = platform_config.get('config')
         
     app.setStyleSheet("QWidget {border-image: url("+Background+") }")
       
@@ -260,7 +265,7 @@ if __name__ == '__main__':
         scene.addItem(browser)  
     
     #copy_right = QtGui.QLabel(COPYRIGHT_MESSAGE)
-    text = scene.addText(unicode(COPYRIGHT_MESSAGE),QtGui.QFont("calibri",10))
+    text = scene.addText(str(COPYRIGHT_MESSAGE),QtGui.QFont("calibri",10))
     text.setOpacity(0.5)
     text.setPos(QtCore.QPointF(screen.bottomRight()- QtCore.QPoint(100,30)))
     

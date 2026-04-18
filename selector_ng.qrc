@@ -1,5 +1,7 @@
 <!DOCTYPE RCC><RCC version="1.0">
 <qresource>
+    <file>2012.png</file>
+    <file>2019.png</file>
     <file>ica.png</file>
     <file>uco.png</file>
     <file>vmplayer.png</file>
