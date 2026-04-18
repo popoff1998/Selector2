@@ -7,51 +7,242 @@ Created on Thu Mar 07 08:31:30 2013
 Selector-ng
 """
 
-from qt_compat import QtCore, QtGui
-from pprint import pprint
-import selector_ng_rc
-import copy
 import sys
 import os
-from image import CompoundImage
+import logging
+import subprocess
+import shutil
+import xml.etree.ElementTree as ET
+import tempfile
+import json
 
-#variables globales de configuracion
-VIEW_WEB=False
-TEXT_ROTATE=False
 
-SESSIONS_LIMIT = 0 # 0=unlimited
-MINIMUN_SESSIONS_LIMIT=3
+_BOOT_LOGGER = logging.getLogger(__name__)
 
-PLATFORM = {'win32':{'background':'./fondo.png',
-                     'config':'conf.txt',
-                     'key_prefix':'computer_key_'},
-            'linux':{'background':'/usr/local/uco/selector/fondo.png',
-                     'config':'conf.txt',
-                     'key_prefix':'computer_key_'},
-            'linux2':{'background':'/usr/local/uco/selector/fondo.png',
-                      'config':'/etc/thinstation.network',
-                      'key_prefix':'/usr/local/uco/selector/computer_key_'}
+# Activa/desactiva bytecode segun permisos de escritura del despliegue.
+_MODULE_DIR = os.path.dirname(os.path.abspath(__file__))
+_CAN_WRITE_MODULE_DIR = os.access(_MODULE_DIR, os.W_OK)
+sys.dont_write_bytecode = not _CAN_WRITE_MODULE_DIR
+
+from asset_resolver import resolve_asset_path
+
+
+def _bool_env_enabled(name: str, default: bool = True) -> bool:
+    raw = os.environ.get(name)
+    if raw is None:
+        return default
+    return raw.strip().lower() not in {"0", "false", "no", "off"}
+
+
+def _sync_selector_qrc_if_needed() -> None:
+    """Sincroniza selector_ng_rc.py si qrc/imagenes cambiaron.
+
+    - Prototipo (escritura): regenera cuando detecta desfase.
+    - Produccion (solo lectura): no regenera y usa el RC existente.
+    """
+
+    if not _bool_env_enabled("SELECTOR_SYNC_QRC", default=True):
+        return
+
+    qrc_path = os.path.join(_MODULE_DIR, "selector_ng.qrc")
+    rc_py_path = os.path.join(_MODULE_DIR, "selector_ng_rc.py")
+    manifest_path = os.path.join(_MODULE_DIR, "selector_ng_rc.manifest.json")
+
+    if not os.path.exists(qrc_path):
+        return
+
+    rc_mtime = os.stat(rc_py_path).st_mtime_ns if os.path.exists(rc_py_path) else -1
+
+    try:
+        root = ET.parse(qrc_path).getroot()
+    except ET.ParseError as exc:
+        _BOOT_LOGGER.warning("No se pudo parsear %s (%s)", qrc_path, exc)
+        return
+
+    # Calcula la fecha mas reciente entre el .qrc y los ficheros fuente resueltos.
+    latest_source_mtime = os.stat(qrc_path).st_mtime_ns
+    changed_sources = []
+    manifest_entries = []
+    qrc_dir = os.path.dirname(qrc_path)
+    for node in root.findall(".//file"):
+        rel = (node.text or "").strip()
+        if not rel:
+            continue
+        alias_name = os.path.basename(rel)
+        base_name = os.path.splitext(alias_name)[0]
+
+        # El resolvedor elige el fichero local más reciente entre variantes.
+        resolved_source = resolve_asset_path(base_name)
+        if resolved_source.startswith(":/"):
+            resolved_source = rel if os.path.isabs(rel) else os.path.join(qrc_dir, rel)
+
+        if not os.path.exists(resolved_source):
+            continue
+
+        source_stat = os.stat(resolved_source)
+        source_mtime = source_stat.st_mtime_ns
+        latest_source_mtime = max(latest_source_mtime, source_mtime)
+        manifest_entries.append(
+            {
+                "alias": alias_name,
+                "source": os.path.relpath(resolved_source, _MODULE_DIR).replace("\\", "/"),
+                "mtime_ns": source_mtime,
+                "size": source_stat.st_size,
             }
+        )
+        if source_mtime >= rc_mtime:
+            changed_sources.append(resolved_source)
 
-BEST_SESSION_SIZE=3
-SCALE_SIZE = 0.72
+    current_fingerprint = {"assets": manifest_entries}
+    saved_fingerprint = None
+    if os.path.exists(manifest_path):
+        try:
+            with open(manifest_path, "r", encoding="utf-8") as f:
+                saved_fingerprint = json.load(f)
+        except (OSError, json.JSONDecodeError):
+            saved_fingerprint = None
 
-SCALE_TRANSFORMATION_MODE = 1 # 0=Fast 1=Smooth
+    fingerprint_changed = saved_fingerprint != current_fingerprint
+    stale = rc_mtime <= latest_source_mtime or fingerprint_changed
+    if not stale:
+        return
 
-ZOOM_FACTOR = 1.7
-MARGEN_X = 20.0
-MARGEN_Y = 100.0
+    if not _CAN_WRITE_MODULE_DIR:
+        _BOOT_LOGGER.info(
+            "QRC desactualizado detectado pero entorno en solo lectura; "
+            "se usa selector_ng_rc.py existente."
+        )
+        print(
+            "[selector-ng] QRC desactualizado detectado en solo lectura; "
+            "se usa selector_ng_rc.py existente."
+        )
+        return
 
-DEFAULT_ICON_SIZE = 256.0
-DEFAULT_FONT_SIZE = 25.0
-DEFAULT_FONT_WEIGHT = 100.0
-MINIMUN_FONT_SIZE = 10.0
+    commands = []
+    for cmd in ("pyrcc5", "pyrcc6", "pyrcc4"):
+        resolved = shutil.which(cmd)
+        if resolved:
+            commands.append([resolved])
 
-COPYRIGHT_MESSAGE = u'©Tonin 2013'
+    commands.extend(
+        [
+            [sys.executable, "-m", "PyQt5.pyrcc_main"],
+            [sys.executable, "-m", "PyQt6.pyrcc_main"],
+        ]
+    )
+
+    attempt_errors = []
+    for base_cmd in commands:
+        try:
+            with tempfile.NamedTemporaryFile(
+                mode="w",
+                suffix=".qrc",
+                dir=qrc_dir,
+                delete=False,
+                encoding="utf-8",
+            ) as tmp_qrc:
+                tmp_qrc_path = tmp_qrc.name
+                tmp_qrc.write("<!DOCTYPE RCC><RCC version=\"1.0\">\n")
+                tmp_qrc.write("<qresource>\n")
+                for entry in manifest_entries:
+                    tmp_qrc.write(
+                        f'    <file alias="{entry["alias"]}">{entry["source"]}</file>\n'
+                    )
+                tmp_qrc.write("</qresource>\n</RCC>\n")
+
+            result = subprocess.run(
+                base_cmd + ["-o", rc_py_path, tmp_qrc_path],
+                cwd=qrc_dir,
+                stdout=subprocess.PIPE,
+                stderr=subprocess.PIPE,
+                text=True,
+                check=False,
+            )
+        except OSError:
+            continue
+        finally:
+            if "tmp_qrc_path" in locals() and os.path.exists(tmp_qrc_path):
+                try:
+                    os.remove(tmp_qrc_path)
+                except OSError:
+                    pass
+
+        if result.returncode == 0:
+            _BOOT_LOGGER.info("QRC sincronizado: %s -> %s", qrc_path, rc_py_path)
+            changed_sources_rel = [
+                os.path.relpath(path, _MODULE_DIR).replace("\\", "/")
+                for path in changed_sources
+            ]
+            changed_list = ", ".join(changed_sources_rel) if changed_sources_rel else "selector_ng.qrc"
+            try:
+                with open(manifest_path, "w", encoding="utf-8") as f:
+                    json.dump(current_fingerprint, f, indent=2, ensure_ascii=False)
+            except OSError as exc:
+                _BOOT_LOGGER.warning("No se pudo escribir %s: %s", manifest_path, exc)
+            print(
+                "[selector-ng] RC regenerado: "
+                "selector_ng_rc.py | fuentes cambiadas: "
+                + changed_list
+            )
+            return
+
+        attempt_errors.append(
+            f"comando={base_cmd!r} stderr={result.stderr.strip() or result.stdout.strip()}"
+        )
+
+    _BOOT_LOGGER.warning(
+        "No se pudo regenerar selector_ng_rc.py automaticamente. "
+        "Instala/expone pyrcc5 o desactiva con SELECTOR_SYNC_QRC=0. %s",
+        " | ".join(attempt_errors) if attempt_errors else "sin detalle de error",
+    )
+
+
+from qt_compat import QtCore, QtGui
+import selector_ng_rc
+import copy
+from typing import Any, Iterable, Optional
+from image import CompoundImage
+from selector_settings import load_settings
+
+
+LOGGER = logging.getLogger(__name__)
+
+# Variables globales de configuración (cargadas desde JSON con fallback).
+_SETTINGS = load_settings()
+
+_RUNTIME = _SETTINGS.get("runtime", {})
+_UI = _SETTINGS.get("ui", {})
+
+VIEW_WEB = bool(_RUNTIME.get("view_web", False))
+TEXT_ROTATE = bool(_RUNTIME.get("text_rotate", False))
+
+SESSIONS_LIMIT = int(_RUNTIME.get("sessions_limit", 0))  # 0=unlimited
+MINIMUN_SESSIONS_LIMIT = int(_RUNTIME.get("minimum_sessions_limit", 3))
+
+PLATFORM = _SETTINGS.get("platform", {})
+
+BEST_SESSION_SIZE = int(_UI.get("best_session_size", 3))
+SCALE_SIZE = float(_UI.get("scale_size", 0.72))
+
+SCALE_TRANSFORMATION_MODE = int(_UI.get("scale_transformation_mode", 1))  # 0=Fast 1=Smooth
+
+ZOOM_FACTOR = float(_UI.get("zoom_factor", 1.7))
+MARGEN_X = float(_UI.get("margin_x", 20.0))
+MARGEN_Y = float(_UI.get("margin_y", 100.0))
+
+DEFAULT_ICON_SIZE = float(_UI.get("default_icon_size", 256.0))
+DEFAULT_FONT_SIZE = float(_UI.get("default_font_size", 25.0))
+DEFAULT_FONT_WEIGHT = float(_UI.get("default_font_weight", 100.0))
+MINIMUN_FONT_SIZE = float(_UI.get("minimum_font_size", 10.0))
+
+COPYRIGHT_MESSAGE = str(_UI.get("copyright_message", "©Tonin 2026"))
+
+
+_sync_selector_qrc_if_needed()
 
 
 class MyWindow(QtGui.QGraphicsView):
-    def __init__(self,scene,app):
+    def __init__(self, scene: Any, app: Any) -> None:
         super(MyWindow,self).__init__(scene)
         self.app = app
         self.setFrameStyle(0)
@@ -60,14 +251,12 @@ class MyWindow(QtGui.QGraphicsView):
         self.setVerticalScrollBarPolicy(QtCore.Qt.ScrollBarAlwaysOff)
         self.setFocusPolicy(QtCore.Qt.StrongFocus)
         
-    def show(self):
+    def show(self) -> None:
         self.showFullScreen()
-        #self.setFocus(0)
-        #self.raise_()        
-        #self.activateWindow()
+        # Mensaje útil durante pruebas para verificar foco real de la ventana.
         print("Tengo el foco? ", self.hasFocus())
         
-    def keyPressEvent(self, e):
+    def keyPressEvent(self, e: Any) -> None:
         global ZOOM_FACTOR
         if e.key() == QtCore.Qt.Key_Escape:
             self.app.quit()
@@ -81,7 +270,14 @@ class Pixmap(QtGui.QGraphicsWidget):
     enter = QtCore.pyqtSignal()
     leave = QtCore.pyqtSignal()
 
-    def __init__(self, pix, parent,sep_x,teclasSelector):
+    def __init__(
+        self,
+        pix: Any,
+        parent: Any,
+        sep_x: float,
+        teclasSelector: Any,
+        key_prefix: str = '',
+    ) -> None:
         super(Pixmap, self).__init__(None)
         self.setAcceptHoverEvents(True)
 
@@ -89,6 +285,7 @@ class Pixmap(QtGui.QGraphicsWidget):
         self.p = QtGui.QPixmap(pix)
         self.vt = parent.vt
         self.teclasSelector = teclasSelector
+        self.key_prefix = key_prefix
         #Escalo el Pixmap
         if parent.numeroSesiones < MINIMUN_SESSIONS_LIMIT:
             numeroSesiones = MINIMUN_SESSIONS_LIMIT
@@ -130,29 +327,30 @@ class Pixmap(QtGui.QGraphicsWidget):
         #Ahora creo la imagen de las teclas
         screen = QtGui.QDesktopWidget().screenGeometry()
         self.teclas = CompoundImage("F" + str(self.vt),"Haga click o pulse ", \
-                                    u"para ir a esta sesión",screen)
+                                    u"para ir a esta sesión",screen,
+                                    image_prefix=self.key_prefix)
         self.teclas.pixmap.setVisible(False)
         
-    def paint(self, painter, option, widget):
+    def paint(self, painter: Any, option: Any, widget: Any) -> None:
         painter.drawPixmap(QtCore.QPointF(), self.p)
 
-    def mousePressEvent(self, ev):
+    def mousePressEvent(self, ev: Any) -> None:
         self.teclas.pixmap.setVisible(False)
         self.teclasSelector.pixmap.setVisible(True)
         self.clicked.emit()
-        os.system("chvt "+str(self.vt))
+        switch_virtual_terminal(self.vt)
         
-    def hoverEnterEvent(self,ev):
+    def hoverEnterEvent(self, ev: Any) -> None:
         self.teclas.pixmap.setVisible(True)
         self.teclasSelector.pixmap.setVisible(False)
         self.enter.emit()
         
-    def hoverLeaveEvent(self,ev):
+    def hoverLeaveEvent(self, ev: Any) -> None:
         self.teclas.pixmap.setVisible(False)
         self.teclasSelector.pixmap.setVisible(True)
         self.leave.emit()
         
-    def setGeometry(self, rect):
+    def setGeometry(self, rect: Any) -> None:
         super(Pixmap, self).setGeometry(rect)
 
         if rect.size().width() > self.orig.size().width():
@@ -160,30 +358,43 @@ class Pixmap(QtGui.QGraphicsWidget):
         else:
             self.p = QtGui.QPixmap(self.orig)
 
-def scaleQRectF(qr_orig,zoom_factor):
-        """Devuelve un RectF escalado del argumento en un factor dado"""
-        
-        #Si no hago una copia del objeto machaco el original
-        qr_dest = copy.copy(qr_orig)
-        
-        desp = ((zoom_factor-1) * qr_dest.width())/2
-        #print "Desplazamiento = " , desp
-        qr_dest.setX(qr_dest.x() - desp)
-        qr_dest.setY(qr_dest.y() - desp)
-        qr_dest.setWidth(qr_orig.width() + 2*desp)
-        qr_dest.setHeight(qr_orig.height() + 2*desp)
-        return qr_dest
+def scaleQRectF(qr_orig: Any, zoom_factor: float) -> Any:
+    """Devuelve un QRectF escalado en el factor indicado."""
 
-def createStates(objects , parent):
+    # Copia defensiva para no modificar el rectángulo original.
+    qr_dest = copy.copy(qr_orig)
+
+    desp = ((zoom_factor-1) * qr_dest.width())/2
+    qr_dest.setX(qr_dest.x() - desp)
+    qr_dest.setY(qr_dest.y() - desp)
+    qr_dest.setWidth(qr_orig.width() + 2*desp)
+    qr_dest.setHeight(qr_orig.height() + 2*desp)
+    return qr_dest
+
+
+def switch_virtual_terminal(vt: int) -> None:
+    """Intenta cambiar a la VT indicada de forma segura y portable."""
+
+    # chvt es una utilidad Linux; en otros sistemas no hacemos nada.
+    if not sys.platform.startswith('linux'):
+        LOGGER.debug("Ignorando cambio de VT en plataforma no Linux: %s", sys.platform)
+        return
+
+    try:
+        subprocess.run(["chvt", str(vt)], check=False)
+    except OSError as exc:
+        LOGGER.warning("No se pudo ejecutar chvt %s: %s", vt, exc)
+
+def createStates(objects: Iterable[Any], parent: Any) -> None:
     for obj in objects:
-        #Guardo el Rect original y alculo el nuevo Rect para el zoom
+        # Geometría normal y geometría ampliada para hover.
         origRect = obj.geometry()
         zoomRect = scaleQRectF(origRect,ZOOM_FACTOR)
-        #Lo mismo para el label
+        # Ajuste de posición vertical del label en zoom.
         origY = obj.label.y()
         zoomY = obj.label.y() - zoomRect.y() + origRect.y()
 
-        #Estado zoom
+        # Estado con zoom.
         state_zoom = QtCore.QState(parent)
         state_zoom.assignProperty(obj, 'geometry', zoomRect)
         state_zoom.assignProperty(obj.label, 'y' , zoomY)
@@ -191,7 +402,7 @@ def createStates(objects , parent):
             state_zoom.assignProperty(obj.label, 'rotation' , 360)
         parent.addTransition(obj.enter, state_zoom)
 
-        #Estado nozoom        
+        # Estado sin zoom.
         state_nozoom = QtCore.QState(parent)
         state_nozoom.assignProperty(obj, 'geometry', origRect)
         state_nozoom.assignProperty(obj.label, 'y' , origY)
@@ -199,7 +410,7 @@ def createStates(objects , parent):
             state_nozoom.assignProperty(obj.label, 'rotation' , 0)
         parent.addTransition(obj.leave, state_nozoom)
         
-        #Estado click
+        # Estado tras click.
         state_clicked = QtCore.QState(parent)
         state_clicked.assignProperty(obj, 'geometry', origRect)
         state_clicked.assignProperty(obj.label, 'y' , origY)
@@ -207,7 +418,7 @@ def createStates(objects , parent):
             state_clicked.assignProperty(obj.label, 'rotation' , 0)
         parent.addTransition(obj.clicked, state_clicked)
 
-def createAnimations(objects, machine):
+def createAnimations(objects: Iterable[Any], machine: Any) -> None:
     for obj in objects:
         animationGroup = QtCore.QParallelAnimationGroup(obj)
         animationPixmap = QtCore.QPropertyAnimation(obj, b'geometry', obj)
@@ -221,41 +432,60 @@ def createAnimations(objects, machine):
         
         machine.addDefaultAnimation(animationGroup)
 
-#Aqui comienza la aplicacion en si
-if __name__ == '__main__':
-
-    from config_parser import  session
-    from config_parser import  config
+def main(argv: Optional[list[str]] = None) -> int:
+    from config_parser import config
     from web import Browser
 
-    app = QtGui.QApplication(sys.argv)
-    QtCore.pyqtRemoveInputHook()
-    #Inicializo la escena
+    if argv is None:
+        argv = sys.argv
+
+    app = QtGui.QApplication(argv)
+
+    # Algunas versiones/entornos no exponen pyqtRemoveInputHook.
+    if hasattr(QtCore, 'pyqtRemoveInputHook'):
+        QtCore.pyqtRemoveInputHook()
+
+    # Inicializa la escena a tamaño de pantalla.
     screen = QtGui.QDesktopWidget().screenGeometry()
     scene = QtGui.QGraphicsScene(float(screen.x()),float(screen.y()), 
                                  float(screen.width()),float(screen.height()))
 
-    platform_config = PLATFORM.get(sys.platform, PLATFORM.get('win32'))
-    Background = platform_config.get('background')
+    platform_config = PLATFORM.get(sys.platform, PLATFORM.get('win32', {}))
+    background_setting = platform_config.get('background')
     Config = platform_config.get('config')
+    key_prefix = platform_config.get('key_prefix', '')
+    background_path = resolve_asset_path(background_setting)
         
-    app.setStyleSheet("QWidget {border-image: url("+Background+") }")
+    app.setStyleSheet("QWidget {border-image: url(" + background_path.replace('\\\\', '/') + ") }")
       
-    #Leo el fichero de configuración y relleno los objetos de sesiones
-    #esto ultimo ya genera los objetos Pixmap
-    cf = config(Config)
+    # Lee la configuración y prepara las sesiones.
+    cf = config(Config, sessions_limit=SESSIONS_LIMIT)
 
-    #Calculo la geometria y relleno mi lista de objetos sesion
+    if cf.numeroSesiones <= 0:
+        LOGGER.error("No hay sesiones configuradas en %s", Config)
+        return 1
+
+    # Calcula separación horizontal y rellena objetos de sesión.
     sep_x = (screen.width() - 2*MARGEN_X) / cf.numeroSesiones
     
-    teclasSelector = CompoundImage("F6","Pulse ","para volver al selector",screen)
+    teclasSelector = CompoundImage(
+        "F6",
+        "Pulse ",
+        "para volver al selector",
+        screen,
+        image_prefix=key_prefix,
+    )
     teclasSelector.pixmap.setVisible(True)
     scene.addItem(teclasSelector.pixmap)
 
-    cf.rellenaSesiones(sep_x,teclasSelector)
+    cf.rellenaSesiones(
+        sep_x,
+        teclasSelector,
+        pixmap_factory=Pixmap,
+        key_prefix=key_prefix,
+    )
     
-    #Añado los Pixmaps a la escena, pongo su geometría y
-    #creo la lista de objetos para la animación
+    # Añade elementos a la escena y construye lista animable.
     objects = []
     for s in cf.sesiones:
         scene.addItem(s.pixmap)
@@ -267,15 +497,13 @@ if __name__ == '__main__':
         browser = Browser()
         scene.addItem(browser)  
     
-    #copy_right = QtGui.QLabel(COPYRIGHT_MESSAGE)
     text = scene.addText(str(COPYRIGHT_MESSAGE),QtGui.QFont("calibri",10))
     text.setOpacity(0.5)
     text.setPos(QtCore.QPointF(screen.bottomRight()- QtCore.QPoint(100,30)))
     
-    #Creo la ventana principal y los estados
+    # Crea ventana principal y máquina de estados para animaciones.
     window = MyWindow(scene,app)
 
-    #Lo que viene a continuación es para la animación
     machine = QtCore.QStateMachine()
     machine.setGlobalRestorePolicy(QtCore.QStateMachine.RestoreProperties)
 
@@ -290,12 +518,14 @@ if __name__ == '__main__':
     machine.setInitialState(group)
     machine.start()
 
-    #PRUEBAS
-    #raw_input("Pulse una tecla para empezar ...")
-    
-    #Muestro la ventana maximizada
+    # Muestra la ventana maximizada.
     window.show()
     
 
-    sys.exit(app.exec_())
+    return app.exec_()
+
+
+#Aqui comienza la aplicacion en si
+if __name__ == '__main__':
+    sys.exit(main())
 

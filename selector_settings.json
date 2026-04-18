@@ -1,0 +1,38 @@
+{
+  "runtime": {
+    "view_web": false,
+    "text_rotate": false,
+    "sessions_limit": 0,
+    "minimum_sessions_limit": 3
+  },
+  "ui": {
+    "best_session_size": 3,
+    "scale_size": 0.72,
+    "scale_transformation_mode": 1,
+    "zoom_factor": 1.7,
+    "margin_x": 20.0,
+    "margin_y": 100.0,
+    "default_icon_size": 256.0,
+    "default_font_size": 25.0,
+    "default_font_weight": 100.0,
+    "minimum_font_size": 10.0,
+    "copyright_message": "©Tonin 2026"
+  },
+  "platform": {
+    "win32": {
+      "background": "./fondo.png",
+      "config": "conf.txt",
+      "key_prefix": "computer_key_"
+    },
+    "linux": {
+      "background": "/usr/local/uco/selector/fondo.png",
+      "config": "conf.txt",
+      "key_prefix": "computer_key_"
+    },
+    "linux2": {
+      "background": "/usr/local/uco/selector/fondo.png",
+      "config": "/etc/thinstation.network",
+      "key_prefix": "/usr/local/uco/selector/computer_key_"
+    }
+  }
+}

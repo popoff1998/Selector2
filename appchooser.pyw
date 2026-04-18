@@ -42,6 +42,14 @@
 #############################################################################
 
 
+import sys
+import os
+
+# Activa/desactiva bytecode segun permisos de escritura del despliegue.
+_MODULE_DIR = os.path.dirname(os.path.abspath(__file__))
+_CAN_WRITE_MODULE_DIR = os.access(_MODULE_DIR, os.W_OK)
+sys.dont_write_bytecode = not _CAN_WRITE_MODULE_DIR
+
 from PyQt4 import QtCore, QtGui
 
 import appchooser_rc
