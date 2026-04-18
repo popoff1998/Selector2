@@ -23,11 +23,14 @@ SESSIONS_LIMIT = 0 # 0=unlimited
 MINIMUN_SESSIONS_LIMIT=3
 
 PLATFORM = {'win32':{'background':'./fondo.png',
-                     'config':'conf.txt'},
+                     'config':'conf.txt',
+                     'key_prefix':'computer_key_'},
             'linux':{'background':'/usr/local/uco/selector/fondo.png',
-                     'config':'conf.txt'},
+                     'config':'conf.txt',
+                     'key_prefix':'computer_key_'},
             'linux2':{'background':'/usr/local/uco/selector/fondo.png',
-                      'config':'conf.txt'}
+                      'config':'/etc/thinstation.network',
+                      'key_prefix':'/usr/local/uco/selector/computer_key_'}
             }
 
 BEST_SESSION_SIZE=3
