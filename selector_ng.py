@@ -468,8 +468,19 @@ def main(argv: Optional[list[str]] = None) -> int:
     Config = _resolve_runtime_path(platform_config.get('config'))
     key_prefix = _resolve_runtime_path(platform_config.get('key_prefix', ''))
     background_path = resolve_asset_path(background_setting)
-        
-    app.setStyleSheet("QWidget {border-image: url(" + background_path.replace('\\\\', '/') + ") }")
+
+    background_pixmap = QtGui.QPixmap(background_path)
+    if not background_pixmap.isNull():
+        scene.setBackgroundBrush(QtGui.QBrush(background_pixmap))
+    else:
+        LOGGER.warning("No se pudo cargar el fondo: %s", background_path)
+
+    if background_path.startswith(':/'):
+        background_url = background_path
+    else:
+        background_url = QtCore.QUrl.fromLocalFile(background_path).toString()
+
+    app.setStyleSheet(f"QWidget {{border-image: url('{background_url}') }}")
       
     # Lee la configuración y prepara las sesiones.
     cf = config(Config, sessions_limit=SESSIONS_LIMIT)

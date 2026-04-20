@@ -5,10 +5,34 @@ import json
 import logging
 import os
 from copy import deepcopy
-from typing import Any
+from typing import Any, Optional
 
 
 LOGGER = logging.getLogger(__name__)
+
+
+def _load_json_with_fallback(path: str) -> dict[str, Any] | None:
+    """Carga JSON probando UTF-8 y codificaciones legacy habituales."""
+
+    encodings = ("utf-8", "utf-8-sig", "cp1252", "latin-1")
+    last_exc: Optional[Exception] = None
+    for enc in encodings:
+        try:
+            with open(path, "r", encoding=enc) as f:
+                data = json.load(f)
+            if enc != "utf-8":
+                LOGGER.warning("%s leido con encoding de fallback: %s", path, enc)
+            return data
+        except UnicodeDecodeError as exc:
+            last_exc = exc
+            continue
+        except json.JSONDecodeError:
+            # Si no es JSON valido, no sirve probar otra codificacion sin corregir formato.
+            raise
+
+    if last_exc is not None:
+        LOGGER.warning("No se pudo decodificar %s: %s", path, last_exc)
+    return None
 
 
 DEFAULT_SETTINGS = {
@@ -81,8 +105,9 @@ def load_settings() -> dict[str, Any]:
         return settings
 
     try:
-        with open(path, "r", encoding="utf-8") as f:
-            custom = json.load(f)
+        custom = _load_json_with_fallback(path)
+        if custom is None:
+            return settings
     except (OSError, json.JSONDecodeError) as exc:
         LOGGER.warning("No se pudo cargar configuracion %s (%s). Se usan defaults.", path, exc)
         return settings

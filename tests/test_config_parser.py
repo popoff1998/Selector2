@@ -65,6 +65,20 @@ SESSION_10_SCREEN=7
         finally:
             os.remove(path)
 
+    def test_title_generates_icon_candidates(self):
+        from config_parser import session
+
+        candidates = session._icon_candidates_for_values(
+            {
+                "TITLE": "UCO2019-ESCRITORIO",
+                "TYPE": "receiver",
+            }
+        )
+
+        self.assertEqual(candidates[0], "UCO2019-ESCRITORIO")
+        self.assertIn("2019", candidates)
+        self.assertIn("receiver", candidates)
+
 
 if __name__ == "__main__":
     unittest.main()

@@ -9,7 +9,7 @@ Parser-sesiones para selector-ng
 
 import logging
 import re
-from typing import Any
+from typing import Any, Optional
 
 from qt_compat import QtGui
 from asset_resolver import resolve_asset_path
@@ -18,8 +18,87 @@ from asset_resolver import resolve_asset_path
 LOGGER = logging.getLogger(__name__)
 
 
+def _read_text_lines_with_fallback(path: str) -> list[str]:
+    """Lee texto probando codificaciones frecuentes en despliegues legacy."""
+
+    encodings = ("utf-8", "utf-8-sig", "cp1252", "latin-1")
+    last_exc: Optional[Exception] = None
+    for enc in encodings:
+        try:
+            with open(path, "r", encoding=enc) as f:
+                lines = f.readlines()
+            if enc != "utf-8":
+                LOGGER.warning("%s leido con encoding de fallback: %s", path, enc)
+            return lines
+        except UnicodeDecodeError as exc:
+            last_exc = exc
+            continue
+
+    # Ultimo recurso para no bloquear la app por caracteres puntuales corruptos.
+    with open(path, "r", encoding="utf-8", errors="replace") as f:
+        lines = f.readlines()
+    if last_exc is not None:
+        LOGGER.warning(
+            "%s no pudo leerse limpiamente en UTF-8/cp1252/latin-1 (%s). "
+            "Se cargara con caracteres reemplazados.",
+            path,
+            last_exc,
+        )
+    return lines
+
+
 class session(object):
     """Objeto para almacenar una sesion."""
+
+    @staticmethod
+    def _icon_candidates_for_values(valores: dict[str, str]) -> list[str]:
+        """Devuelve candidatos de icono priorizando el TITLE de la sesion."""
+
+        candidates: list[str] = []
+
+        title = (valores.get("TITLE") or "").strip()
+        if title:
+            candidates.append(title)
+            normalized_title = re.sub(r"\s+", "-", title)
+            if normalized_title != title:
+                candidates.append(normalized_title)
+
+            digit_tokens = re.findall(r"\d+", title)
+            for token in digit_tokens:
+                if token not in candidates:
+                    candidates.append(token)
+
+        icon_override = (valores.get("ICON") or "").strip()
+        if icon_override:
+            candidates.insert(0, icon_override)
+
+        pixmap_override = (valores.get("PIXMAP") or "").strip()
+        if pixmap_override and pixmap_override not in candidates:
+            candidates.insert(0, pixmap_override)
+
+        image_override = (valores.get("IMAGE") or "").strip()
+        if image_override and image_override not in candidates:
+            candidates.insert(0, image_override)
+
+        type_name = (valores.get("TYPE") or "").strip()
+        if type_name and type_name not in candidates:
+            candidates.append(type_name)
+
+        if "unknown" not in candidates:
+            candidates.append("unknown")
+
+        return candidates
+
+    @staticmethod
+    def _resolve_pixmap_for_values(valores: dict[str, str]) -> str:
+        """Busca el primer pixmap valido usando TITLE y luego TYPE."""
+
+        for candidate in session._icon_candidates_for_values(valores):
+            pixmap_rc = resolve_asset_path(candidate)
+            if not QtGui.QPixmap(pixmap_rc).isNull():
+                return pixmap_rc
+
+        return resolve_asset_path("unknown")
 
     def __init__(
         self,
@@ -41,9 +120,8 @@ class session(object):
         except ValueError:
             self.vt = 3
 
-        # Resuelve icono desde disco (dinamico) con fallback a qrc.
-        icon_name = self.type.strip() or "unknown"
-        pixmap_rc = resolve_asset_path(icon_name)
+        # Resuelve icono por TITLE con fallback a TYPE y, al final, unknown.
+        pixmap_rc = self._resolve_pixmap_for_values(valores)
 
         self.numeroSesiones = parent.numeroSesiones
         self.pixmap = pixmap_factory(
@@ -69,8 +147,7 @@ class config(object):
         self.numeroSesiones = 0
 
         try:
-            with open(filename, "r", encoding="utf-8") as f:
-                self.text = f.readlines()
+            self.text = _read_text_lines_with_fallback(filename)
         except OSError as exc:
             LOGGER.error(
                 "No se pudo leer el fichero de configuracion %s: %s", filename, exc

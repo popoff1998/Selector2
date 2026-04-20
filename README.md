@@ -54,6 +54,7 @@ Para cambiar iconos o fondo, basta con reemplazar archivos en disco:
 
 - Iconos de sesion: por `TYPE` en `conf.txt`.
   - Ejemplo: `SESSION_2_TYPE=2019` -> busca `2019.png`, `2019.jpg`, `2019.jpeg`.
+  - Si el `TITLE` contiene un nombre o numero de icono, se intenta antes que el `TYPE`.
 - Fondo: segun `platform.<plataforma>.background`.
 
 No hace falta regenerar `selector_ng_rc.py` para cambios normales de imagen si el archivo local existe.
