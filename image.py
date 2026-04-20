@@ -100,7 +100,8 @@ class CompoundImage(QtGui.QGraphicsWidget):
 
         pix = QtGui.QPixmap().fromImage(image)
         self.pixmap.setPixmap(pix)
-        screenCenter = QtCore.QPointF(screen.center())
+        screenCenter = QtCore.QPointF(float(screen.width()) / 2.0,
+                          float(screen.height()) / 2.0)
         pixmapCenter = QtCore.QPointF(self.pixmap.boundingRect().center())
         self.pixmap.setPos( screenCenter - pixmapCenter)         
         

@@ -109,6 +109,7 @@ class session(object):
         parent: Any,
         pixmap_factory: Any,
         key_prefix: str,
+        screen_rect: Any = None,
     ) -> None:
         self.indice = indice
         self.valores = valores
@@ -125,7 +126,12 @@ class session(object):
 
         self.numeroSesiones = parent.numeroSesiones
         self.pixmap = pixmap_factory(
-            QtGui.QPixmap(pixmap_rc), self, sep_x, teclasSelector, key_prefix
+            QtGui.QPixmap(pixmap_rc),
+            self,
+            sep_x,
+            teclasSelector,
+            key_prefix,
+            screen_rect,
         )
 
 
@@ -212,6 +218,7 @@ class config(object):
         teclasSelector: Any,
         pixmap_factory: Any,
         key_prefix: str = "",
+        screen_rect: Any = None,
     ) -> None:
         """Construye los objetos session listos para mostrar en la UI."""
 
@@ -225,5 +232,6 @@ class config(object):
                 self,
                 pixmap_factory,
                 key_prefix,
+                screen_rect,
             )
             self.sesiones.append(sess)

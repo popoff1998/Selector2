@@ -277,6 +277,22 @@ class MyWindow(QtGui.QGraphicsView):
             ZOOM_FACTOR = ZOOM_FACTOR + 0.2
 #    def changeEvent(self, e):
         #print "Change event ",e.type()
+
+
+def get_screen_geometry(app: Any) -> Any:
+    """Obtiene la geometria de la pantalla activa con fallback legacy."""
+
+    # En Qt5+, usa QScreen para respetar el DISPLAY/servidor X activo.
+    if hasattr(app, "primaryScreen"):
+        screen_obj = app.primaryScreen()
+        if screen_obj is not None and hasattr(screen_obj, "geometry"):
+            return screen_obj.geometry()
+
+    # Fallback compatible con Qt4.
+    desktop = app.desktop() if hasattr(app, "desktop") else QtGui.QDesktopWidget()
+    if hasattr(desktop, "primaryScreen") and hasattr(desktop, "screenGeometry"):
+        return desktop.screenGeometry(desktop.primaryScreen())
+    return desktop.screenGeometry()
         
 class Pixmap(QtGui.QGraphicsWidget):
     clicked = QtCore.pyqtSignal()
@@ -290,6 +306,7 @@ class Pixmap(QtGui.QGraphicsWidget):
         sep_x: float,
         teclasSelector: Any,
         key_prefix: str = '',
+        screen_rect: Any = None,
     ) -> None:
         super(Pixmap, self).__init__(None)
         self.setAcceptHoverEvents(True)
@@ -338,7 +355,7 @@ class Pixmap(QtGui.QGraphicsWidget):
         self.label.setPos(xCENTER - Rect.width()/2,yPOS + ICON_SIZE)
 
         #Ahora creo la imagen de las teclas
-        screen = QtGui.QDesktopWidget().screenGeometry()
+        screen = screen_rect or QtGui.QDesktopWidget().screenGeometry()
         self.teclas = CompoundImage("F" + str(self.vt),"Haga click o pulse ", \
                                     u"para ir a esta sesión",screen,
                                     image_prefix=self.key_prefix)
@@ -458,10 +475,9 @@ def main(argv: Optional[list[str]] = None) -> int:
     if hasattr(QtCore, 'pyqtRemoveInputHook'):
         QtCore.pyqtRemoveInputHook()
 
-    # Inicializa la escena a tamaño de pantalla.
-    screen = QtGui.QDesktopWidget().screenGeometry()
-    scene = QtGui.QGraphicsScene(float(screen.x()),float(screen.y()), 
-                                 float(screen.width()),float(screen.height()))
+    # Inicializa la escena a tamaño de la pantalla actual, en coords locales.
+    screen = get_screen_geometry(app)
+    scene = QtGui.QGraphicsScene(0.0, 0.0, float(screen.width()), float(screen.height()))
 
     platform_config = PLATFORM.get(sys.platform, PLATFORM.get('win32', {}))
     background_setting = platform_config.get('background')
@@ -507,6 +523,7 @@ def main(argv: Optional[list[str]] = None) -> int:
         teclasSelector,
         pixmap_factory=Pixmap,
         key_prefix=key_prefix,
+        screen_rect=screen,
     )
     
     # Añade elementos a la escena y construye lista animable.
@@ -523,7 +540,7 @@ def main(argv: Optional[list[str]] = None) -> int:
     
     text = scene.addText(str(COPYRIGHT_MESSAGE),QtGui.QFont("calibri",10))
     text.setOpacity(0.5)
-    text.setPos(QtCore.QPointF(screen.bottomRight()- QtCore.QPoint(100,30)))
+    text.setPos(QtCore.QPointF(screen.width() - 100, screen.height() - 30))
     
     # Crea ventana principal y máquina de estados para animaciones.
     window = MyWindow(scene,app)
