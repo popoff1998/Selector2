@@ -7,10 +7,12 @@ from typing import Iterable
 from qt_compat import QtGui
 
 
+_MODULE_DIR = os.path.dirname(os.path.abspath(__file__))
+
 # Directorios de busqueda por defecto para assets locales.
 _DEFAULT_ASSET_DIRS = (
-    ".",
-    "./assets",
+    _MODULE_DIR,
+    os.path.join(_MODULE_DIR, "assets"),
 )
 
 

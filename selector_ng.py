@@ -15,6 +15,7 @@ import shutil
 import xml.etree.ElementTree as ET
 import tempfile
 import json
+from typing import Any, Iterable, Optional
 
 
 _BOOT_LOGGER = logging.getLogger(__name__)
@@ -32,6 +33,19 @@ def _bool_env_enabled(name: str, default: bool = True) -> bool:
     if raw is None:
         return default
     return raw.strip().lower() not in {"0", "false", "no", "off"}
+
+
+def _resolve_runtime_path(path_value: Optional[str]) -> str:
+    """Resuelve rutas de config respetando absolutos y relativas al modulo."""
+
+    if not path_value:
+        return ""
+
+    expanded = os.path.expandvars(os.path.expanduser(path_value))
+    if os.path.isabs(expanded):
+        return os.path.normpath(expanded)
+
+    return os.path.normpath(os.path.join(_MODULE_DIR, expanded))
 
 
 def _sync_selector_qrc_if_needed() -> None:
@@ -200,7 +214,6 @@ def _sync_selector_qrc_if_needed() -> None:
 from qt_compat import QtCore, QtGui
 import selector_ng_rc
 import copy
-from typing import Any, Iterable, Optional
 from image import CompoundImage
 from selector_settings import load_settings
 
@@ -452,8 +465,8 @@ def main(argv: Optional[list[str]] = None) -> int:
 
     platform_config = PLATFORM.get(sys.platform, PLATFORM.get('win32', {}))
     background_setting = platform_config.get('background')
-    Config = platform_config.get('config')
-    key_prefix = platform_config.get('key_prefix', '')
+    Config = _resolve_runtime_path(platform_config.get('config'))
+    key_prefix = _resolve_runtime_path(platform_config.get('key_prefix', ''))
     background_path = resolve_asset_path(background_setting)
         
     app.setStyleSheet("QWidget {border-image: url(" + background_path.replace('\\\\', '/') + ") }")
