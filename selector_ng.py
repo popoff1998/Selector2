@@ -255,9 +255,10 @@ _sync_selector_qrc_if_needed()
 
 
 class MyWindow(QtGui.QGraphicsView):
-    def __init__(self, scene: Any, app: Any) -> None:
+    def __init__(self, scene: Any, app: Any, screen_rect: Any) -> None:
         super(MyWindow,self).__init__(scene)
         self.app = app
+        self.screen_rect = screen_rect
         self.setFrameStyle(0)
         self.setAlignment(QtCore.Qt.AlignLeft | QtCore.Qt.AlignTop)
         self.setHorizontalScrollBarPolicy(QtCore.Qt.ScrollBarAlwaysOff)
@@ -265,7 +266,22 @@ class MyWindow(QtGui.QGraphicsView):
         self.setFocusPolicy(QtCore.Qt.StrongFocus)
         
     def show(self) -> None:
+        # En entornos X11 sin window manager, forzamos geometria explicita.
+        self.setGeometry(self.screen_rect)
+        self.move(self.screen_rect.x(), self.screen_rect.y())
+        self.resize(self.screen_rect.width(), self.screen_rect.height())
         self.showFullScreen()
+
+        # Fallback adicional por si FullScreen no se aplica en este servidor X.
+        self.app.processEvents()
+        if (
+            self.width() < self.screen_rect.width()
+            or self.height() < self.screen_rect.height()
+        ):
+            self.setWindowFlags(self.windowFlags() | QtCore.Qt.FramelessWindowHint)
+            self.setGeometry(self.screen_rect)
+            super(MyWindow, self).show()
+
         # Mensaje útil durante pruebas para verificar foco real de la ventana.
         print("Tengo el foco? ", self.hasFocus())
         
@@ -543,7 +559,7 @@ def main(argv: Optional[list[str]] = None) -> int:
     text.setPos(QtCore.QPointF(screen.width() - 100, screen.height() - 30))
     
     # Crea ventana principal y máquina de estados para animaciones.
-    window = MyWindow(scene,app)
+    window = MyWindow(scene, app, screen)
 
     machine = QtCore.QStateMachine()
     machine.setGlobalRestorePolicy(QtCore.QStateMachine.RestoreProperties)
