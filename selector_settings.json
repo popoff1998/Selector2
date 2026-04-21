@@ -26,13 +26,8 @@
     },
     "linux": {
       "background": "/usr/local/uco/selector/fondo.png",
-      "config": "conf.txt",
-      "key_prefix": "computer_key_"
-    },
-    "linux2": {
-      "background": "/usr/local/uco/selector/fondo.png",
       "config": "/etc/thinstation.network",
-      "key_prefix": "/usr/local/uco/selector/computer_key_"
+      "key_prefix": "computer_key_"
     }
   }
 }
