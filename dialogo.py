@@ -48,7 +48,9 @@ class Ui_Dialog:
         """Setup dialog with confirmation message text."""
         self.text = text
         Dialog.setObjectName("Dialog")
-        Dialog.resize(750, 560)
+        Dialog.setMinimumWidth(740)
+        Dialog.setMaximumWidth(900)
+        Dialog.setMinimumHeight(450)
         
         font = QtGui.QFont()
         font.setFamily("Helvetica")
@@ -63,7 +65,7 @@ class Ui_Dialog:
         )
 
         self.buttonBox = QtGui.QDialogButtonBox(Dialog)
-        self.buttonBox.setGeometry(QtCore.QRect(190, 390, 311, 71))
+        self.buttonBox.setGeometry(QtCore.QRect(190, 410, 311, 71))
         
         sizePolicy = QtGui.QSizePolicy(QtGui.QSizePolicy.Fixed, QtGui.QSizePolicy.Fixed)
         sizePolicy.setHorizontalStretch(0)
@@ -95,7 +97,12 @@ class Ui_Dialog:
         self.buttonBox.setObjectName("buttonBox")
         
         self.textBrowser = QtGui.QTextBrowser(Dialog)
-        self.textBrowser.setGeometry(QtCore.QRect(40, 40, 621, 301))
+        self.textBrowser.setGeometry(QtCore.QRect(20, 20, 700, 380))
+        
+        # Permitir que se expanda al contenido
+        sizePolicy = QtGui.QSizePolicy(QtGui.QSizePolicy.Expanding, QtGui.QSizePolicy.Expanding)
+        self.textBrowser.setSizePolicy(sizePolicy)
+        
         font = QtGui.QFont()
         font.setFamily("Helvetica")
         font.setPointSize(14)
@@ -112,6 +119,9 @@ class Ui_Dialog:
         self.retranslateUi(Dialog)
         self.buttonBox.accepted.connect(Dialog.accept)
         self.buttonBox.rejected.connect(Dialog.reject)
+        
+        # Adaptar el tamaño del diálogo al contenido
+        Dialog.adjustSize()
 
     def retranslateUi(self, Dialog):
         """Set dialog text and title."""
@@ -154,3 +164,32 @@ class Ui_Dialog:
         
         # Usar setHtml directamente sin _translate para preservar entidades
         self.textBrowser.setHtml(_text)
+        
+        # Calcular la altura necesaria para el contenido
+        doc = self.textBrowser.document()
+        doc_width = 700  # Ancho fijo del textBrowser
+        doc.setTextWidth(doc_width)
+        
+        # Obtener la altura necesaria
+        needed_text_height = int(doc.size().height())
+        if needed_text_height > 600:
+            needed_text_height = 600
+        if needed_text_height < 100:
+            needed_text_height = 100
+        
+        # Ajustar la geometría del textBrowser
+        self.textBrowser.setGeometry(QtCore.QRect(20, 20, doc_width, needed_text_height))
+        
+        # Reposicionar los botones debajo del texto
+        button_y = needed_text_height + 30
+        self.buttonBox.setGeometry(QtCore.QRect(190, button_y, 311, 71))
+        
+        # Ajustar el tamaño del diálogo
+        dialog_height = needed_text_height + 110  # +110 para botones y márgenes
+        if dialog_height > 800:
+            dialog_height = 800
+        if dialog_height < 450:
+            dialog_height = 450
+        
+        Dialog.setMinimumHeight(dialog_height)
+        Dialog.adjustSize()
