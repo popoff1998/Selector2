@@ -216,6 +216,7 @@ import selector_ng_rc
 import copy
 from image import CompoundImage
 from selector_settings import load_settings
+from dialogo import Ui_Dialog
 
 
 LOGGER = logging.getLogger(__name__)
@@ -332,6 +333,7 @@ class Pixmap(QtGui.QGraphicsWidget):
         self.vt = parent.vt
         self.teclasSelector = teclasSelector
         self.key_prefix = key_prefix
+        self.dialogo = parent.dialogo
         #Escalo el Pixmap
         if parent.numeroSesiones < MINIMUN_SESSIONS_LIMIT:
             numeroSesiones = MINIMUN_SESSIONS_LIMIT
@@ -378,6 +380,15 @@ class Pixmap(QtGui.QGraphicsWidget):
                                     image_prefix=self.key_prefix)
         self.teclas.pixmap.setVisible(False)
         
+        #Crear el diálogo si existe
+        self.Dialog = None
+        if self.dialogo:
+            self.Dialog = QtGui.QDialog()
+            self.ui = Ui_Dialog()
+            self.ui.setupUi(self.Dialog, self.dialogo)
+            # Foco por defecto en Cancelar
+            self.ui.buttonBox.button(QtGui.QDialogButtonBox.Cancel).setFocus()
+        
     def paint(self, painter: Any, option: Any, widget: Any) -> None:
         painter.drawPixmap(QtCore.QPointF(), self.p)
 
@@ -385,7 +396,14 @@ class Pixmap(QtGui.QGraphicsWidget):
         self.teclas.pixmap.setVisible(False)
         self.teclasSelector.pixmap.setVisible(True)
         self.clicked.emit()
-        switch_virtual_terminal(self.vt)
+        
+        # Si existe diálogo, mostrar y ejecutar solo si se acepta.
+        if self.Dialog:
+            if self.Dialog.exec_() == QtGui.QDialog.Accepted:
+                switch_virtual_terminal(self.vt)
+        else:
+            # Sin diálogo, cambiar directamente.
+            switch_virtual_terminal(self.vt)
         
     def hoverEnterEvent(self, ev: Any) -> None:
         self.teclas.pixmap.setVisible(True)

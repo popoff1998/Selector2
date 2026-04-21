@@ -126,6 +126,7 @@ class session(object):
         self.valores = valores
         self.title = valores.get("TITLE", "")
         self.type = valores.get("TYPE", "")
+        self.dialogo = (valores.get("DIALOGO") or "").strip().strip('"').strip("'")
 
         try:
             self.vt = int(valores.get("SCREEN", "0")) + 3
