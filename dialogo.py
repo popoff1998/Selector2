@@ -143,7 +143,7 @@ class Ui_Dialog:
                        "<html><head><meta charset=\"utf-8\"><meta http-equiv=\"Content-Type\" content=\"text/html; charset=utf-8\" />" \
                        "<meta name=\"qrichtext\" content=\"1\" /><style type=\"text/css\">\n" \
                        "p, li { white-space: pre-wrap; }\n" \
-                       "</style></head><body style=\" font-family:'Helvetica'; font-size:16pt; font-weight:72; font-style:normal;\">\n"
+                       "</style></head><body style=\" font-family:'Helvetica'; font-size:17pt; font-weight:72; font-style:normal;\">\n"
 
         textLineHead = "<p style=\" margin-top:0px; margin-bottom:15px; margin-left:0px; margin-right:0px; -qt-block-indent:0; text-indent:0px;\"><span style=\" font-weight:600;\">"
         textLineTail = "</span></p>\n"
