@@ -79,6 +79,19 @@ SESSION_10_SCREEN=7
         self.assertIn("2019", candidates)
         self.assertIn("receiver", candidates)
 
+    def test_title_candidates_handle_quotes_and_dash_variants(self):
+        from config_parser import session
+
+        candidates = session._icon_candidates_for_values(
+            {
+                "TITLE": '"VDI3D"',
+                "TYPE": "receiver",
+            }
+        )
+
+        self.assertIn("VDI3D", candidates)
+        self.assertIn("VDI-3D", candidates)
+
 
 if __name__ == "__main__":
     unittest.main()

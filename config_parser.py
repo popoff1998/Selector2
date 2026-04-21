@@ -56,9 +56,20 @@ class session(object):
 
         candidates: list[str] = []
 
-        title = (valores.get("TITLE") or "").strip()
+        title = (valores.get("TITLE") or "").strip().strip('"').strip("'")
         if title:
             candidates.append(title)
+
+            # Intenta equivalencias habituales entre variantes con y sin guiones.
+            title_no_separators = re.sub(r"[-_\s]+", "", title)
+            if title_no_separators and title_no_separators not in candidates:
+                candidates.append(title_no_separators)
+
+            if title_no_separators and title_no_separators != title:
+                dashed_title = re.sub(r"(?<=\D)(?=\d)|(?<=\d)(?=\D)", "-", title_no_separators)
+                if dashed_title and dashed_title not in candidates:
+                    candidates.append(dashed_title)
+
             normalized_title = re.sub(r"\s+", "-", title)
             if normalized_title != title:
                 candidates.append(normalized_title)
