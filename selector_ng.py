@@ -348,27 +348,28 @@ class Pixmap(QtGui.QGraphicsWidget):
         self.orig = self.orig.scaledToHeight(int(scale),SCALE_TRANSFORMATION_MODE)
 
         #Geometria del pixmap
-        ICON_SIZE = self.orig.width()
+        icon_width = float(self.orig.width())
+        icon_height = float(self.orig.height())
         xCENTER = sep_x*float(parent.indice) + sep_x/2 + MARGEN_X
-        xPOS = xCENTER - ICON_SIZE/2
+        xPOS = xCENTER - icon_width/2
         yPOS = MARGEN_Y
         self.setGeometry(QtCore.QRectF(xPOS ,
                                        yPOS , 
-                                       ICON_SIZE ,
-                                       ICON_SIZE))
+                           icon_width ,
+                           icon_height))
 
         #Etiqueta
-        fontSize = 5+(DEFAULT_FONT_SIZE * ICON_SIZE/DEFAULT_ICON_SIZE) 
+        fontSize = 5 + (DEFAULT_FONT_SIZE * icon_height / DEFAULT_ICON_SIZE)
         if fontSize < MINIMUN_FONT_SIZE: 
             fontSize = MINIMUN_FONT_SIZE
         fontSize = int(fontSize)
-        #print fontSize,ICON_SIZE
+        #print fontSize,icon_height
         font = QtGui.QFont("calibri",fontSize,100) #family,size,weight
         self.label =  QtGui.QGraphicsTextItem()
         self.label.setPlainText(parent.title.title().replace('"',''))
         self.label.setFont(font) 
         Rect = self.label.boundingRect()
-        self.label.setPos(xCENTER - Rect.width()/2,yPOS + ICON_SIZE)
+        self.label.setPos(xCENTER - Rect.width()/2, yPOS + icon_height)
 
         #Ahora creo la imagen de las teclas
         screen = screen_rect or QtGui.QDesktopWidget().screenGeometry()
