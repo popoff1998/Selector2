@@ -29,6 +29,8 @@ def _read_text_lines_with_fallback(path: str) -> list[str]:
                 lines = f.readlines()
             if enc != "utf-8":
                 LOGGER.warning("%s leido con encoding de fallback: %s", path, enc)
+                # Si se leyó con encoding distinto a UTF-8, intentar corregir doble codificación
+                lines = _fix_double_encoding(lines, enc)
             return lines
         except UnicodeDecodeError as exc:
             last_exc = exc
@@ -45,6 +47,25 @@ def _read_text_lines_with_fallback(path: str) -> list[str]:
             last_exc,
         )
     return lines
+
+
+def _fix_double_encoding(lines: list[str], source_encoding: str) -> list[str]:
+    """Corrige doble codificación UTF-8 interpretado como Latin-1/cp1252."""
+    if source_encoding.lower() in ("utf-8", "utf-8-sig"):
+        return lines  # No necesita corrección
+
+    corrected = []
+    for line in lines:
+        try:
+            # Si el archivo fue leído como cp1252 pero contiene UTF-8, 
+            # re-codificar: cp1252 raw bytes -> UTF-8 string
+            line_fixed = line.encode(source_encoding).decode("utf-8", errors="replace")
+            corrected.append(line_fixed)
+        except (UnicodeDecodeError, UnicodeEncodeError):
+            # Si falla la corrección, mantener la línea original
+            corrected.append(line)
+    
+    return corrected
 
 
 class session(object):
