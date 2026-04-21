@@ -58,7 +58,7 @@ class Ui_Dialog:
         font.setWeight(9)
         Dialog.setFont(font)
         Dialog.setStyleSheet(
-            "QDialog { background-color: rgb(255, 255, 255); border: 2px solid black; }\n"
+            "QDialog { background-color: rgb(255, 255, 255); border: 2px solid black; border-radius: 10px; }\n"
             "font: 75 19pt \"Helvetica\";"
         )
 
