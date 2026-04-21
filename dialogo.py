@@ -50,7 +50,7 @@ class Ui_Dialog:
         Dialog.setObjectName("Dialog")
         Dialog.setMinimumWidth(740)
         Dialog.setMaximumWidth(900)
-        Dialog.setMinimumHeight(450)
+        Dialog.setMaximumHeight(700)  # Máximo absoluto del diálogo
         
         font = QtGui.QFont()
         font.setFamily("Helvetica")
@@ -172,24 +172,19 @@ class Ui_Dialog:
         
         # Obtener la altura necesaria
         needed_text_height = int(doc.size().height())
-        if needed_text_height > 600:
-            needed_text_height = 600
-        if needed_text_height < 100:
-            needed_text_height = 100
+        if needed_text_height > 580:
+            needed_text_height = 580
+        if needed_text_height < 50:
+            needed_text_height = 50
         
         # Ajustar la geometría del textBrowser
         self.textBrowser.setGeometry(QtCore.QRect(20, 20, doc_width, needed_text_height))
         
         # Reposicionar los botones debajo del texto
-        button_y = needed_text_height + 30
+        button_y = needed_text_height + 15
         self.buttonBox.setGeometry(QtCore.QRect(190, button_y, 311, 71))
         
-        # Ajustar el tamaño del diálogo
-        dialog_height = needed_text_height + 110  # +110 para botones y márgenes
-        if dialog_height > 800:
-            dialog_height = 800
-        if dialog_height < 450:
-            dialog_height = 450
+        # Ajustar el tamaño del diálogo exacto sin exceso
+        dialog_height = button_y + 75  # 71 de altura de botones + 4 de margen mínimo
         
-        Dialog.setMinimumHeight(dialog_height)
-        Dialog.adjustSize()
+        Dialog.resize(740, dialog_height)
